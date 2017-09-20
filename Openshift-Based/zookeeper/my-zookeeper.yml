@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: Template
+message:
+metadata:
+  annotations:
+    # description: TODO
+    iconClass: icon-zookeeper
+    openshift.io/display-name: Zookeeper 
+    tags: zookeeper
+    # template.openshift.io/documentation-url: TODO
+    # template.openshift.io/long-description: TODO
+    # template.openshift.io/provider-display-name: TODO
+  name: zookeeper
+  # namespace: TODO
+
+objects:
+
+  # A non-headless service which takes pod readiness into consideration
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "${SERVICE_NAME}"
+      annotations:
+        service.alpha.openshift.io/dependencies: '[{"name":"${SERVICE_NAME}-discovery","namespace":"","kind":"Service"}]'
+      labels:
+        app: "${SERVICE_NAME}"
+    spec:
+      # the list of ports that are exposed by this service
+      ports:
+        - port: 2888
+          name: server
+        - port: 3888
+          name: leader-election
+      # will route traffic to pods having labels matching this selector
+      selector:
+        app: "${SERVICE_NAME}"
+
+  # A headless service to create DNS records for service discovery
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "${SERVICE_NAME}-discovery"
+      annotations:
+        service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+      labels:
+        app: "${SERVICE_NAME}"
+    spec:
+      clusterIP: None
+      # the list of ports that are exposed by this service
+      ports:
+        - port: 2888
+          name: server
+        - port: 3888
+          name: leader-election
+      # will route traffic to pods having labels matching this selector
+      selector:
+        app: "${SERVICE_NAME}"
+
+  - kind: StatefulSet
+    apiVersion: apps/v1beta1
+    metadata:
+      name: "${SERVICE_NAME}"
+      labels:
+        app: "${SERVICE_NAME}"
+    spec:
+      # pets get DNS/hostnames that follow the pattern: ${metadata.name}-NUM.${spec.serviceName}.default.svc.cluster.local
+      serviceName: "${SERVICE_NAME}-internal"
+      replicas: 3
+      # describes the pod that will be created if insufficient replicas are detected
+      template:
+        metadata:
+          # this label will be used for count running pods
+          labels:
+            name: "${SERVICE_NAME}"
+            app: "${SERVICE_NAME}"
+        spec:
+          containers:
+            - name: k8szk
+              image: "quay.io/mohammadmazraeh/kuber-zookeeper:latest"
+              imagePullPolicy: Always
+              ports:
+              - containerPort: 2181
+                name: client
+              - containerPort: 2888
+                name: server
+              - containerPort: 3888
+                name: leader-election
+              env:
+              - name : ZK_REPLICAS
+                value: "3"
+              - name : ZK_HEAP_SIZE
+                value: "1G"
+              - name : ZK_TICK_TIME
+                value: "2000"
+              - name : ZK_INIT_LIMIT
+                value: "10"
+              - name : ZK_SYNC_LIMIT
+                value: "5"
+              - name : ZK_MAX_CLIENT_CNXNS
+                value: "60"
+              - name: ZK_SNAP_RETAIN_COUNT
+                value: "3"
+              - name: ZK_PURGE_INTERVAL
+                value: "0"
+              - name: ZK_CLIENT_PORT
+                value: "2181"
+              - name: ZK_SERVER_PORT
+                value: "2888"
+              - name: ZK_ELECTION_PORT
+                value: "3888"
+              command:
+              - sh
+              - -c
+              - zkGenConfig.sh && zkServer.sh start-foreground
+              readinessProbe:
+                exec:
+                  command:
+                  - "zkOk.sh"
+                initialDelaySeconds: 10
+                timeoutSeconds: 5
+              livenessProbe:
+                exec:
+                  command:
+                  - "zkOk.sh"
+                initialDelaySeconds: 10
+                timeoutSeconds: 5
+parameters:
+  - name: SERVICE_NAME
+    displayName: Service Name
+    description: The name used when creating the required deployment config, build config,
+      service etc. Must be unique and contain only lower-case letters.
+    required: true
+    value: zk
+

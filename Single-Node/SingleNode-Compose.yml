@@ -1,0 +1,111 @@
+---
+version: '2'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:3.3.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: 127.0.0.1:2888:3888
+    network_mode: host
+
+  kafka:
+    image: confluentinc/cp-kafka:3.3.0
+    container_name: kafka
+    network_mode: host
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 127.0.0.1:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      JMX_PORT: 8000
+  schema-registry:
+    image: confluentinc/cp-schema-registry:3.3.0
+    container_name: schema-registry
+    hostname: localhost
+    depends_on:
+      - zookeeper
+      - kafka
+    ports:
+      - '8081:8081'
+    network_mode: host
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 127.0.0.1:2181
+      SCHEMA_REGISTRY_LISTENERS: http://localhost:8081
+
+  kafka-rest:
+    image:  confluentinc/cp-kafka-rest:3.3.0
+    container_name: kafka-rest
+    depends_on:
+      - zookeeper
+      - kafka
+      - schema-registry
+    ports:
+      - '8082:8082'
+    network_mode: host
+    environment:
+      KAFKA_REST_ZOOKEEPER_CONNECT: 127.0.0.1:2181
+      KAFKA_REST_LISTENERS: http://127.0.0.1:8082
+      KAFKA_REST_SCHEMA_REGISTRY_URL: http://127.0.0.1:8081
+      KAFKA_REST_HOST_NAME: kafka-rest
+
+  kafka-manager:
+    image: sheepkiller/kafka-manager:latest
+    container_name: kafka-manager
+    hostname: kafka-manager
+    ports:
+      - '9000:9000'
+    network_mode: host
+    depends_on:
+      - zookeeper
+      - kafka
+      - schema-registry
+    environment:
+      ZK_HOSTS: 127.0.0.1:2181
+      APPLICATION_SECRET: letmein 
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.5.0
+    container_name: elasticsearch
+    network_mode: host
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+      - "discovery.zen.ping.unicast.hosts=elasticsearch"
+      - xpack.monitoring.enabled=true
+      - xpack.security.enabled=false
+      - xpack.graph.enabled=false
+      - xpack.ml.enabled=false
+      - xpack.watcher.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9200:9200
+  kibana:
+    image: quay.io/digikala/kibana:latest
+    container_name: kibana
+    environment:
+      SERVER_NAME: kibana.digikala.com
+      ELASTICSEARCH_URL: http://127.0.0.1:9200
+    ports:
+      - 5601:5601
+    network_mode: host
+
+  lostash:
+    image: docker.elastic.co/logstash/logstash:5.5.2
+    container_name: logstash
+    network_mode: host
+    volumes:
+      - ${PWD}/logstash-pipelines/:/usr/share/logstash/pipeline/
+    extra_hosts:
+      - "elasticsearch:127.0.0.1"

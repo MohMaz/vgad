@@ -1,0 +1,244 @@
+apiVersion: v1
+kind: Template
+message:
+metadata:
+  annotations:
+    # description: TODO
+    iconClass: icon-elasticsearch
+    openshift.io/display-name: ElasticSearch - Hot/Warm Cluster
+    tags: database,elasticsearch
+    # template.openshift.io/documentation-url: TODO
+    # template.openshift.io/long-description: TODO
+    # template.openshift.io/provider-display-name: TODO
+  name: elasticsearch-hot-warm-cluster
+  # namespace: TODO
+
+objects:
+
+  # A non-headless service which takes pod readiness into consideration
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "${SERVICE_NAME}"
+      annotations:
+        service.alpha.openshift.io/dependencies: '[{"name":"${SERVICE_NAME}-discovery","namespace":"","kind":"Service"}]'
+      labels:
+        app: "${SERVICE_NAME}"
+    spec:
+      # the list of ports that are exposed by this service
+      ports:
+        - name: elasticsearch
+          port: 9200
+      # will route traffic to pods having labels matching this selector
+      selector:
+        app: "${SERVICE_NAME}"
+
+  # A headless service to create DNS records for service discovery
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "${SERVICE_NAME}-discovery"
+      annotations:
+        service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+      labels:
+        app: "${SERVICE_NAME}"
+    spec:
+      clusterIP: None
+      # the list of ports that are exposed by this service
+      ports:
+        - name: elasticsearch
+          port: 9300
+      # will route traffic to pods having labels matching this selector
+      selector:
+        app: "${SERVICE_NAME}"
+
+  - kind: StatefulSet
+    apiVersion: apps/v1beta3
+    metadata:
+      name: "${SERVICE_NAME}-hot"
+      labels:
+        app: "${SERVICE_NAME}"
+    spec:
+      # pets get DNS/hostnames that follow the pattern: ${metadata.name}-NUM.${spec.serviceName}.default.svc.cluster.local
+      serviceName: "${SERVICE_NAME}-hot-internal"
+      replicas: 1
+      # describes the pod that will be created if insufficient replicas are detected
+      template:
+        metadata:
+          # this label will be used for count running pods
+          labels:
+            name: "${SERVICE_NAME}-hot"
+            app: "${SERVICE_NAME}"
+        spec:
+          containers:
+            - name: elasticsearch
+              image: "quay.io/digikala/elasticsearch:hot-warm-cluster"
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 9200
+                - containerPort: 9300
+              volumeMounts:
+                - name: elasticsearch-hot-data
+                  mountPath: "/usr/share/elasticsearch/data"
+              env:
+                - name: ES_JAVA_OPTS
+                  value: ${ELASTICSEARCH_JAVA_OPTS}
+                - name: HOT_OR_WARM
+                  value: hot
+                - name: ES_DISCOVERY_HOST
+                  value: ${SERVICE_NAME}-discovery
+                - name: ES_PROCESSORS
+                  value: ${ES_PROCESSORS}
+                - name: THREAD_POOL_BULK_SIZE
+                  value: ${THREAD_POOL_BULK_SIZE}
+                - name: THREAD_POOL_BULK_QUEUE_SIZE
+                  value: ${THREAD_POOL_BULK_QUEUE_SIZE}
+              resources:
+                limits:
+                  cpu: "${CPU_CORE}"
+                  memory: "${MEMORY_LIMIT}"
+              readinessProbe:
+                exec:
+                  command:
+                  - "/usr/share/elasticsearch/probe/readiness.sh"
+                initialDelaySeconds: 5
+                timeoutSeconds: 5
+                periodSeconds: 5
+              livenessProbe:
+                initialDelaySeconds: 30
+                tcpSocket:
+                  port: 9300
+                timeoutSeconds: 1
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-hot-data
+            annotations:
+              # Uncomment this if using dynamic volume provisioning.
+              # https://docs.openshift.org/latest/install_config/persistent_storage/dynamically_provisioning_pvs.html
+              # volume.alpha.kubernetes.io/storage-class: anything
+          spec:
+            # the volume can be mounted as read-write by a single node
+            accessModes: [ ReadWriteOnce ]
+            resources:
+              requests:
+                storage: "${VOLUME_CAPACITY}"
+
+
+  - kind: StatefulSet
+    apiVersion: apps/v1beta1
+    metadata:
+      name: "${SERVICE_NAME}-warm"
+      labels:
+        app: "${SERVICE_NAME}"
+    spec:
+      # pets get DNS/hostnames that follow the pattern: ${metadata.name}-NUM.${spec.serviceName}.default.svc.cluster.local
+      serviceName: "${SERVICE_NAME}-warm-internal"
+      replicas: 0
+      # describes the pod that will be created if insufficient replicas are detected
+      template:
+        metadata:
+          # this label will be used for count running pods
+          labels:
+            name: "${SERVICE_NAME}-warm"
+            app: "${SERVICE_NAME}"
+        spec:
+          containers:
+            - name: elasticsearch
+              image: "quay.io/digikala/elasticsearch:hot-warm-cluster"
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 9200
+                - containerPort: 9300
+              volumeMounts:
+                - name: elasticsearch-warm-data
+                  mountPath: "/usr/share/elasticsearch/data"
+              env:
+                - name: ES_JAVA_OPTS
+                  value: ${ELASTICSEARCH_JAVA_OPTS}
+                - name: HOT_OR_WARM
+                  value: warm
+                - name: ES_DISCOVERY_HOST
+                  value: ${SERVICE_NAME}-discovery
+                - name: ES_PROCESSORS
+                  value: ${ES_PROCESSORS}
+                - name: THREAD_POOL_BULK_SIZE
+                  value: ${THREAD_POOL_BULK_SIZE}
+                - name: THREAD_POOL_BULK_QUEUE_SIZE
+                  value: ${THREAD_POOL_BULK_QUEUE_SIZE}
+              resources:
+                limits:
+                  memory: "${MEMORY_LIMIT}"
+              readinessProbe:
+                exec:
+                  command:
+                  - "/usr/share/elasticsearch/probe/readiness.sh"
+              livenessProbe:
+                initialDelaySeconds: 30
+                tcpSocket:
+                  port: 9300
+                timeoutSeconds: 1
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-warm-data
+            annotations:
+              # Uncomment this if using dynamic volume provisioning.
+              # https://docs.openshift.org/latest/install_config/persistent_storage/dynamically_provisioning_pvs.html
+              # volume.alpha.kubernetes.io/storage-class: anything
+          spec:
+            # the volume can be mounted as read-write by a single node
+            accessModes: [ ReadWriteOnce ]
+            resources:
+              requests:
+                storage: "${VOLUME_CAPACITY}"
+
+parameters:
+  - name: MEMORY_LIMIT
+    displayName: Memory Limit
+    description: Maximum amount of memory each ElasticSearch container can use, e.g. 500Mi, 1Gi. This
+      can be modified later in the StatefulSet.
+    required: true
+    value: 3Gi
+
+  - name: CPU_CORE
+    displayName: CPU Default
+    description: Default Cores of each ElasticSearch container can use.
+    required: true
+    value: "4"
+
+  - name: SERVICE_NAME
+    displayName: Service Name
+    description: The name used when creating the required deployment config, build config,
+      service etc. Must be unique and contain only lower-case letters.
+    required: true
+    value: elasticsearch
+
+  - name: VOLUME_CAPACITY
+    displayName: Volume Capacity
+    description: Volume space available for data, e.g. 2Gi, 5Gi.
+    required: true
+    value: 200Mi
+
+  - name: ELASTICSEARCH_JAVA_OPTS
+    displayName: ElasticSearch Java Opts
+    description: Java Options for ElasticSearch, separated by a space
+    required: false
+    value: -Xms1g -Xmx1g
+
+  - name: ES_PROCESSORS
+    displayName: ElasticSearch Java Opts
+    description: Java Options for ElasticSearch, separated by a space
+    required: false
+    value: "4"
+
+  - name: THREAD_POOL_BULK_SIZE
+    displayName: ElasticSearch Bulk Thread Pool Size
+    description: ElasticSearch Bulk Thread Pool Size
+    required: false
+    value: "4"
+
+  - name: THREAD_POOL_BULK_QUEUE_SIZE
+    displayName: ElasticSearch Bulk Thread Pool Queue Size
+    description: ElasticSearch Bulk Thread Pool Queue Size
+    required: false
+    value: "2000"
+

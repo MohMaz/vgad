@@ -1,0 +1,155 @@
+---
+version: '3.2'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:3.3.0
+    container_name: zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: 172.16.159.102:2888:3888
+    network_mode: host
+    volumes:
+      - ./healthchecks/zookeeper-healthcheck.sh:/healthcheck.sh
+    healthcheck:
+      test: ["CMD", "bash", "/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  kafka:
+    image: confluentinc/cp-kafka:3.3.0
+    container_name: kafka
+    restart: always
+    network_mode: host
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 172.16.159.102:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://172.16.159.102:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_BROCKER_RACK: r1
+      KAFKA_NUM_PARTITIONS: 15
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "true"
+      JMX_PORT: 8000
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:3.3.0
+    container_name: schema-registry
+    restart: always
+    hostname: localhost
+    depends_on:
+      - zookeeper
+      - kafka
+    ports:
+      - '8081:8081'
+    network_mode: host
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 172.16.159.102:2181
+      SCHEMA_REGISTRY_LISTENERS: http://localhost:8081
+
+  kafka-manager:
+    image: sheepkiller/kafka-manager:latest
+    container_name: kafka-manager
+    restart: always
+    hostname: kafka-manager
+    ports:
+      - '9000:9000'
+    network_mode: host
+    depends_on:
+      - zookeeper
+      - kafka
+      - schema-registry
+    environment:
+      ZK_HOSTS: 172.16.159.102:2181
+      APPLICATION_SECRET: letmein 
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.5.1
+    container_name: elasticsearch
+    restart: always
+    network_mode: host
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "discovery.zen.ping.unicast.hosts=elasticsearch"
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9200:9200
+  kibana:
+    image: docker.elastic.co/kibana/kibana:5.5.1
+    container_name: kibana
+    restart: always
+    environment:
+      SERVER_NAME: kibana.digikala.com
+      ELASTICSEARCH_URL: http://172.16.159.102:9200
+    ports:
+      - 5601:5601
+    network_mode: host
+  snowplow-collector:
+    image: quay.io/digikala/snowplow-collector:latest
+    container_name: snowplow-collector
+    restart: always
+    network_mode: host
+    volumes:
+      - ./collector-files/collector-application.conf:/tmp/snowplow/collector/collector-application.conf
+    ports:
+      - 8291:8291
+  snowplow-enrichment:
+    image: quay.io/digikala/snowplow-enrichment:latest
+    container_name: snowplow-enrichment
+    restart: always
+    network_mode: host
+    volumes:
+      - ./enrichment-files/enrichment-application.conf:/tmp/snowplow/enrichment/enrichment-application.conf
+      - ./enrichment-files/enrichments/:/tmp/snowplow/enrichment/enrichments/
+      - ./enrichment-files/iglu_resolver.json:/tmp/snowplow/enrichment/iglu_resolver.json
+  iglue-server:
+    image: httpd:latest
+    container_name: iglue-server
+    restart: always
+    network_mode: host
+    environment:
+      - IGLU_PORT=8125
+    volumes:
+      - ./iglu server-files/public-html:/usr/local/apache2/htdocs/
+      - ./iglu server-files/httpd.conf:/usr/local/apache2/conf/httpd.conf
+  lostash:
+    image: docker.elastic.co/logstash/logstash:5.5.1
+    container_name: logstash
+    restart: always
+    network_mode: host
+    volumes:
+      - ${PWD}/logstash-pipelines/:/usr/share/logstash/pipeline/
+    extra_hosts:
+      - "elasticsearch:172.16.159.102"
+  db:
+    image: postgres:10
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    ports:
+      - 5432:5432
+  adminer:
+    image: adminer
+    container_name: adminer
+    ports:
+      - 8080:8080
+  pgadmin4:
+    image: thajeztah/pgadmin4:1.6
+    container_name: pgadmi4
+    ports:
+      - 5050:5050
