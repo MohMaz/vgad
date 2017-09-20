@@ -31,7 +31,8 @@ RUN set -x \
     && chown -R "$KAFKA_USER:$KAFKA_USER"  $KAFKA_DATA_DIR
   
 
-RUN touch $KAFKA_HOME/conf/log4j.properties && \
+RUN mkdir $KAFKA_HOME/conf && \
+    touch $KAFKA_HOME/conf/log4j.properties && \
     chmod 777 $KAFKA_HOME/conf/log4j.properties
 
 RUN mkdir $KAFKA_HOME/logs && \
