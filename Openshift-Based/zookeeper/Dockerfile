@@ -53,4 +53,19 @@ RUN set -x \
 	&& ln -s /opt/zookeeper/bin/* /usr/bin \
 	&& ln -s /opt/zookeeper/$ZK_DIST.jar /usr/share/zookeeper/ \
 	&& ln -s /opt/zookeeper/lib/* /usr/share/zookeeper 
-USER zookeeper
+#USER root
+RUN chmod 777 /opt/zookeeper/bin/zkGenConfig.sh
+RUN chmod 777 /opt/zookeeper/bin/zkOk.sh
+RUN chmod 777 /opt/zookeeper/bin/zkMetrics.sh
+RUN touch /opt/zookeeper/conf/zoo.cfg && \
+    chmod 777 /opt/zookeeper/conf/zoo.cfg
+RUN touch /opt/zookeeper/conf/log4j.properties && \
+    chmod 777 /opt/zookeeper/conf/log4j.properties
+
+RUN touch /var/lib/zookeeper/data/myid
+RUN touch /opt/zookeeper/conf/java.env
+
+RUN chmod 777 /var/lib/zookeeper/data/myid
+RUN chmod 777 /opt/zookeeper/conf/java.env
+
+USER $ZK_USER
