@@ -1,0 +1,73 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-schema-registry
+spec:
+  serviceName: kafka-svc
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: kafka-schema-registry
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values: 
+                    - kafka-schema-registry
+              topologyKey: "kubernetes.io/hostname"
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+             - weight: 1
+               podAffinityTerm:
+                 labelSelector:
+                    matchExpressions:
+                      - key: "app"
+                        operator: In
+                        values: 
+                        - kafka-schema-registry
+                 topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: k8skafka
+        imagePullPolicy: Always
+        image: confluentinc/cp-schema-registry:3.3.0
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: 200m
+          limits:
+            memory: "256Mi"
+            cpu: 200m
+        ports:
+        - containerPort: 8081
+          name: schema-registry-port
+        env:
+        - name: SCHEMA_REGISTRY_HOST_NAME
+          value : "schema-registry"
+        - name:  SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL
+          value: "kafka-0.kafka-svc.vgad.svc.cluster.local:9092,kafka-1.kafka-svc.vgad.svc.cluster.local:9092,kafka-2.kafka-svc.vgad.svc.cluster.local:9092"
+        - name: SCHEMA_REGISTRY_LISTENERS
+          value: "http://0.0.0.0:8081"
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/lib/kafka
+        readinessProbe:
+          exec:
+           command: 
+            - sh 
+            - -c 
+            - "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server=localhost:9093"
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi

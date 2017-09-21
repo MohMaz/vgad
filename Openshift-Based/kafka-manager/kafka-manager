@@ -1,0 +1,62 @@
+---
+apiVersion: apps/v1beta1
+kind: Serice
+metadata:
+  name: kafka-manager
+spec:
+  serviceName: kafka-manager
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kafka-manager
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values: 
+                    - kafka-manager
+              topologyKey: "kubernetes.io/hostname"
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+             - weight: 1
+               podAffinityTerm:
+                 labelSelector:
+                    matchExpressions:
+                      - key: "app"
+                        operator: In
+                        values: 
+                        - zk
+                 topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 300
+      containers:
+      - name: kafka-manager
+        imagePullPolicy: Always
+        image: sheepkiller/kafka-manager:latest
+        resources:
+          requests:
+            memory: "512mi"
+            cpu: 500m
+          limits:
+            memory: "512mi"
+            cpu: 500m
+        ports:
+        - containerPort: 9000
+          name: server
+        env:
+        - name: ZK_HOSTS
+          value : "zk-0.zk-svc.vgad.svc.cluster.local:2181,zk-1.zk-svc.vgad.svc.cluster.local:2181,zk-2.zk-svc.vgad.svc.cluster.local:2181"
+        - name: APPLICATION_SECRET
+          value: "letmein"
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
