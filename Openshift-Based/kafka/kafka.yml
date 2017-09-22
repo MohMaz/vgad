@@ -167,7 +167,7 @@ spec:
         - name: KAFKA_OPTS
           value: "-Dlogging.level=INFO"
         - name: JMX_PORT
-          value: 8000
+          value: "8000"
         volumeMounts:
         - name: datadir
           mountPath: /var/lib/kafka
