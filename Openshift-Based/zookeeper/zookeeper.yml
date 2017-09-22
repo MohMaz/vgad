@@ -20,7 +20,7 @@ kind: ConfigMap
 metadata:
   name: zk-cm
 data:
-  jvm.heap: "1G"
+  jvm.heap: "256m"
   tick: "2000"
   init: "10"
   sync: "5"
@@ -66,10 +66,10 @@ spec:
         image: quay.io/mohammadmazraeh/kuber-zookeeper
         resources:
           limits:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "200m"
           requests:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "200m"
         ports:
         - containerPort: 2181

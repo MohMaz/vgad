@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kafka-manager
+  labels:
+    app: kafka-manager
+spec:
+  containers:
+    - resources:
+        limits:
+          memory: "256Mi"
+          cpu: 200m
+      image: sheepkiller/kafka-manager:latest
+      name: kafka-manager
+      env:
+        - name: ZK_HOSTS
+          value : "zk-0.zk-svc.vgad.svc.cluster.local:2181,zk-1.zk-svc.vgad.svc.cluster.local:2181,zk-2.zk-svc.vgad.svc.cluster.local:2181"
+        - name: APPLICATION_SECRET
+          value: "letmein"
+      ports:
+        - containerPort: 9000
+          name: kafka-manager
