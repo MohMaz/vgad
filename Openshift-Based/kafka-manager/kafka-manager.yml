@@ -1,3 +1,18 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: kafka-manager
+  name: kafka-manager
+spec:
+  ports:
+    # the port that this service should serve on
+    - port: 9000
+  # label keys and values that must match in order to receive traffic for this service
+  selector:
+    app: kafka-manager
+---
 apiVersion: v1
 kind: Pod
 metadata:
