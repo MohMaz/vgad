@@ -10,7 +10,7 @@ spec:
         limits:
           memory: "256Mi"
           cpu: 200m
-      image: sheepkiller/kafka-manager:latest
+      image: quay.io/mohammadmazraeh/kuber-kafka-manager:latest
       name: kafka-manager
       env:
         - name: ZK_HOSTS
