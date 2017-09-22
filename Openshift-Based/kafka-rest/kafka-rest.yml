@@ -1,0 +1,45 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: kafka-rest
+  name: kafka-rest-svc
+spec:
+  ports:
+    # the port that this service should serve on
+    - port: 8082
+  # label keys and values that must match in order to receive traffic for this service
+  selector:
+    app: kafka-rest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kafka-rest
+  labels:
+    app: kafka-rest
+spec:
+  containers:
+    - resources:
+        limits:
+          memory: "256Mi"
+          cpu: 200m
+      image: confluentinc/cp-kafka-rest:3.3.0
+      name: kafka-rest
+      env:
+        - name: KAFKA_REST_ZOOKEEPER_CONNECT
+          value: "zk-0.zk-svc.vgad.svc.cluster.local:2181,zk-1.zk-svc.vgad.svc.cluster.local:2181,zk-2.zk-svc.vgad.svc.cluster.local:2181"
+        - name: KAFKA_REST_LISTENERS
+          value: "http://0.0.0.0:8082"
+        - name: KAFKA_REST_SCHEMA_REGISTRY_URL
+          value: "http://schema-registry-svc.vgad.svc:8081"
+        - name: KAFKA_REST_HOST_NAME
+          value: "kafka-rest"
+      ports:
+        - containerPort: 8082
+          name: kafka-rest
+
+
+
+

@@ -1,3 +1,18 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry-svc
+  labels:
+    app: schema-registry-svc
+spec:
+  ports:
+  - port: 8081
+    name: schema-registry
+  clusterIP: None
+  selector:
+    app: schema-registry
+---
 apiVersion: v1
 kind: Pod
 metadata:
@@ -14,7 +29,7 @@ spec:
       name: schema-registry
       env:
         - name: SCHEMA_REGISTRY_HOST_NAME
-          value : "schema-registry"
+          value : "schema-registry.schema-registry.vgad.svc.cluster.local"
         - name:  SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL
           value: "zk-0.zk-svc.vgad.svc.cluster.local:2181,zk-1.zk-svc.vgad.svc.cluster.local:2181,zk-2.zk-svc.vgad.svc.cluster.local:2181"
         - name: SCHEMA_REGISTRY_LISTENERS
