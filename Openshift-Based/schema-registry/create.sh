@@ -1,1 +1,1 @@
-../oc create -f kafka-schema-registry.yml
+../oc create -f schema-registry.yml
