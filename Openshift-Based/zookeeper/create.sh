@@ -1,3 +1,1 @@
-echo ${PWD}
-../oc process -f zookeeper.yml | ../oc create -f -
-
+../oc create -f zookeeper.yml
